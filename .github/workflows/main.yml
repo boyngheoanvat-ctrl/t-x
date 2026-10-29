@@ -42,17 +42,15 @@ jobs:
         #import <UIKit/UIKit.h>
 
         __attribute__((constructor)) void initNativeMod() {
-            dispatch_async(dispatch_get_main_queue(), ^{
-                NSLog(@"[SicBoMod] Dylib đã được inject thành công!");
-                Class pubgLoadClass = NSClassFromString(@"PubgLoad");
-                if (pubgLoadClass && [pubgLoadClass respondsToSelector:@selector(load)]) {
-                    [pubgLoadClass performSelector:@selector(load)];
-                }
-            });
+            NSLog(@"[SicBoMod] Dylib đã được inject thành công qua constructor!");
+            Class pubgLoadClass = NSClassFromString(@"PubgLoad");
+            if (pubgLoadClass && [pubgLoadClass respondsToSelector:@selector(load)]) {
+                [pubgLoadClass performSelector:@selector(load)];
+            }
         }
         EOF
 
-        # 4. Tạo file PubgLoad.mm (Tạo nút nổi Floating Button trên màn hình)
+        # 4. PubgLoad.mm (Lắng nghe sự kiện ứng dụng đã sẵn sàng để vẽ nút nổi)
         cat << 'EOF' > src/PubgLoad.mm
         #import "PubgLoad.h"
         #import "ImGuiDrawView.h"
@@ -62,43 +60,58 @@ jobs:
         + (void)load {
             static dispatch_once_t onceToken;
             dispatch_once(&onceToken, ^{
-                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                    UIWindow *targetWindow = nil;
-                    for (UIWindow *scene in [[UIApplication sharedApplication] connectedScenes]) {
-                        if ([scene isKindOfClass:[UIWindowScene class]]) {
-                            for (UIWindow *window in [(UIWindowScene *)scene windows]) {
-                                if (window.isKeyWindow) { targetWindow = window; break; }
-                            }
+                [[NSNotificationCenter defaultCenter] addObserver:self
+                                                         selector:@selector(appDidBecomeActive:)
+                                                             name:UIApplicationDidBecomeActiveNotification
+                                                           object:nil];
+            });
+        }
+
+        + (void)appDidBecomeActive:(NSNotification *)note {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                static BOOL iconCreated = NO;
+                if (iconCreated) return;
+                
+                UIWindow *targetWindow = nil;
+                for (UIWindow *scene in [[UIApplication sharedApplication] connectedScenes]) {
+                    if ([scene isKindOfClass:[UIWindowScene class]]) {
+                        for (UIWindow *window in [(UIWindowScene *)scene windows]) {
+                            if (window.isKeyWindow) { targetWindow = window; break; }
                         }
                     }
-                    if (!targetWindow) {
-                        targetWindow = [[UIApplication sharedApplication] keyWindow];
-                    }
+                }
+                if (!targetWindow) {
+                    targetWindow = [[UIApplication sharedApplication] keyWindow];
+                }
+                
+                if (targetWindow) {
+                    iconCreated = YES;
                     
-                    if (targetWindow) {
-                        // Tạo nút nổi hình tròn chữ MOD ở góc trái màn hình
-                        UIButton *floatBtn = [UIButton buttonWithType:UIButtonTypeCustom];
-                        floatBtn.frame = CGRectMake(20, 100, 55, 55);
-                        floatBtn.backgroundColor = [UIColor colorWithRed:0.0 green:0.5 blue:1.0 alpha:0.9];
-                        [floatBtn setTitle:@"MOD" forState:UIControlStateNormal];
-                        [floatBtn setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
-                        floatBtn.titleLabel.font = [UIFont boldSystemFontOfSize:14];
-                        floatBtn.layer.cornerRadius = 27.5;
-                        floatBtn.layer.borderWidth = 2.0;
-                        floatBtn.layer.borderColor = [UIColor whiteColor].CGColor;
-                        
-                        // Sự kiện chạm để bật/tắt menu
-                        [floatBtn addTarget:self action:@selector(floatButtonTapped:) forControlEvents:UIControlEventTouchUpInside];
-                        
-                        // Sự kiện kéo thả nút đi khắp màn hình
-                        UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(panButton:)];
-                        [floatBtn addGestureRecognizer:pan];
-                        
-                        [targetWindow addSubview:floatBtn];
-                        [targetWindow bringSubviewToFront:floatBtn];
-                        NSLog(@"[SicBoMod] Đã hiển thị nút nổi thành công!");
-                    }
-                });
+                    // Tạo nút nổi hình tròn chữ MOD siêu to rõ ở góc trái màn hình
+                    UIButton *floatBtn = [UIButton buttonWithType:UIButtonTypeCustom];
+                    floatBtn.frame = CGRectMake(30, 120, 65, 65);
+                    floatBtn.backgroundColor = [UIColor colorWithRed:0.0 green:0.5 blue:1.0 alpha:0.95];
+                    [floatBtn setTitle:@"MOD" forState:UIControlStateNormal];
+                    [floatBtn setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+                    floatBtn.titleLabel.font = [UIFont boldSystemFontOfSize:15];
+                    floatBtn.layer.cornerRadius = 32.5;
+                    floatBtn.layer.borderWidth = 2.5;
+                    floatBtn.layer.borderColor = [UIColor whiteColor].CGColor;
+                    floatBtn.layer.shadowColor = [UIColor blackColor].CGColor;
+                    floatBtn.layer.shadowRadius = 5.0;
+                    floatBtn.layer.shadowOpacity = 0.6;
+                    
+                    // Sự kiện chạm bật/tắt menu
+                    [floatBtn addTarget:self action:@selector(floatButtonTapped:) forControlEvents:UIControlEventTouchUpInside];
+                    
+                    // Sự kiện kéo thả nút đi khắp màn hình
+                    UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(panButton:)];
+                    [floatBtn addGestureRecognizer:pan];
+                    
+                    [targetWindow addSubview:floatBtn];
+                    [targetWindow bringSubviewToFront:floatBtn];
+                    NSLog(@"[SicBoMod] Nút MOD nổi đã được khởi tạo thành công trên màn hình!");
+                }
             });
         }
 
@@ -106,7 +119,7 @@ jobs:
             [ImGuiDrawView toggleMenu];
         }
 
-        + (void)panButton:(UIPanGestureRecognizer *)pan {
+        + (void)panButton:(UIPanGestureRecognizer * )pan {
             UIView *btn = pan.view;
             CGPoint translation = [pan translationInView:btn.superview];
             CGPoint center = btn.center;
@@ -117,7 +130,7 @@ jobs:
         @end
         EOF
 
-        # 5. Tạo file ImGuiDrawView.mm (Giao diện Menu)
+        # 5. ImGuiDrawView.mm (Giao diện Menu chính)
         cat << 'EOF' > src/ImGuiDrawView.mm
         #import "ImGuiDrawView.h"
         #import <CoreGraphics/CoreGraphics.h>
@@ -142,7 +155,7 @@ jobs:
 
                 if (!modMenuView && targetWindow) {
                     // Khung Menu chính
-                    modMenuView = [[UIView alloc] initWithFrame:CGRectMake(80, 80, 320, 260)];
+                    modMenuView = [[UIView alloc] initWithFrame:CGRectMake(100, 100, 320, 260)];
                     modMenuView.backgroundColor = [UIColor colorWithRed:0.12 green:0.12 blue:0.15 alpha:0.95];
                     modMenuView.layer.cornerRadius = 14.0;
                     modMenuView.layer.borderWidth = 2.0;
@@ -186,7 +199,7 @@ jobs:
                     [closeBtn addTarget:self action:@selector(closeMenuTapped:) forControlEvents:UIControlEventTouchUpInside];
                     [modMenuView addSubview:closeBtn];
                     
-                    // Thêm tính năng kéo thả bảng menu
+                    // Kéo thả bảng menu
                     UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(panMenu:)];
                     [modMenuView addGestureRecognizer:pan];
                     
