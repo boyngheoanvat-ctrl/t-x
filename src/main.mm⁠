@@ -6,7 +6,7 @@ extern "C" {
     #include <lualib.h>
 }
 
-// Đoạn mã Lua của bạn được nhúng thẳng vào đây dưới dạng chuỗi thô
+// Đoạn mã Lua nhúng cứng
 const char* embeddedLuaScript = R"(
 local LocalPlayer = "LocalPlayer"
 local MultiTable = "SicBoMultiplayerSceneTable3D"
@@ -91,7 +91,6 @@ function MainMenu()
 end
 )";
 
-// Hàm tự khởi chạy khi dylib được load vào game
 __attribute__((constructor)) void initLuaEmbedded() {
     dispatch_async(dispatch_get_main_queue(), ^{
         lua_State *L = luaL_newstate();
