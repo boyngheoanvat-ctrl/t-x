@@ -23,7 +23,7 @@ jobs:
         cp lua-5.4.6/src/*.c src_lua/
         rm -f src_lua/lua.c src_lua/luac.c
         
-        # Vá lỗi hàm system() không được hỗ trợ trên iOS trong loslib.c
+        # Vá lỗi system() trên iOS SDK
         sed -i '' 's/#define l_system(cmd)[[:space:]]*system(cmd)/#define l_system(cmd) ((void)(cmd), -1)/g' src_lua/loslib.c
         
         rm -rf lua-5.4.6 lua-5.4.6.tar.gz
@@ -142,17 +142,30 @@ jobs:
 
     - name: Compile Dylib with Embedded Lua
       run: |
-        echo "Bắt đầu biên dịch file dylib tương thích iOS..."
-        mkdir -p build
+        echo "Biên dịch riêng mã C của Lua..."
+        mkdir -p obj_lua build
+        SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
+        
+        # Biên dịch từng file .c của Lua thành .o bằng C compiler (clang)
+        for f in src_lua/*.c; do
+          clang -c "$f" \
+            -arch arm64 \
+            -isysroot "$SDK_PATH" \
+            -Isrc_lua \
+            -o "obj_lua/$(basename "$f" .c).o"
+        done
+
+        echo "Liên kết dylib bằng clang++..."
         clang++ -dynamiclib \
           -arch arm64 \
-          -isysroot $(xcrun --sdk iphoneos --show-sdk-path) \
+          -isysroot "$SDK_PATH" \
           -Isrc_lua \
           -fobjc-arc \
           src/main.mm \
-          src_lua/*.c \
+          obj_lua/*.o \
           -o build/SicBoMod.dylib \
           -framework Foundation
+
         echo "Biên dịch thành công!"
 
     - name: Upload Artifact
