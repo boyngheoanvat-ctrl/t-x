@@ -13,11 +13,48 @@ jobs:
     - name: Checkout Repository
       uses: actions/checkout@v4
 
-    - name: Create Source Files Automatically
+    - name: Create Header and Source Files Automatically
       run: |
         mkdir -p src
 
-        # 1. Tạo file main.mm
+        # 1. Tạo file PubgLoad.h
+        cat << 'EOF' > src/PubgLoad.h
+        #import <Foundation/Foundation.h>
+        #import <UIKit/UIKit.h>
+        @class ImGuiDrawView;
+
+        @interface PubgLoad : NSObject
+        @property (nonatomic, assign) BOOL menuVisible;
+        @property (nonatomic, strong) ImGuiDrawView *vna;
+        @property (nonatomic, strong) UIButton *menuButton;
+        + (void)setMenuVisible:(BOOL)visible;
+        + (void)load;
+        - (void)bootstrapOverlay;
+        - (void)setupMenuButton;
+        - (void)handleMenuButtonTap:(id)sender;
+        @end
+        EOF
+
+        # 2. Tạo file ImGuiDrawView.h
+        cat << 'EOF' > src/ImGuiDrawView.h
+        #import <UIKit/UIKit.h>
+        #import <Metal/Metal.h>
+        #import <MetalKit/MetalKit.h>
+
+        @interface ImGuiDrawView : UIViewController <MTKViewDelegate>
+        @property (nonatomic, strong) MTKView *mtkView;
+        @property (nonatomic, strong) id<MTLDevice> device;
+        @property (nonatomic, strong) id<MTLCommandQueue> commandQueue;
+        + (void)startRuntimeInitialization;
+        + (id)renderDiagnostics;
+        + (id)runtimeMessage;
+        + (long long)runtimeState;
+        + (BOOL)menuIsVisible;
+        + (void)showChange:(BOOL)visible;
+        @end
+        EOF
+
+        # 3. Tạo file main.mm
         cat << 'EOF' > src/main.mm
         #import <Foundation/Foundation.h>
         #import <UIKit/UIKit.h>
@@ -36,7 +73,7 @@ jobs:
         }
         EOF
 
-        # 2. Tạo file PubgLoad.mm
+        # 4. Tạo file PubgLoad.mm
         cat << 'EOF' > src/PubgLoad.mm
         #import "PubgLoad.h"
         #import "ImGuiDrawView.h"
@@ -97,7 +134,7 @@ jobs:
         @end
         EOF
 
-        # 3. Tạo file ImGuiDrawView.mm
+        # 5. Tạo file ImGuiDrawView.mm
         cat << 'EOF' > src/ImGuiDrawView.mm
         #import "ImGuiDrawView.h"
         #import <MetalKit/MetalKit.h>
@@ -164,6 +201,7 @@ jobs:
         clang++ -dynamiclib \
           -arch arm64 \
           -isysroot $(xcrun --sdk iphoneos --show-sdk-path) \
+          -Isrc \
           -fobjc-arc \
           src/main.mm \
           src/PubgLoad.mm \
