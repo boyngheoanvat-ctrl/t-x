@@ -1,4 +1,4 @@
-name: Build Dylib Automatically
+name: Build Dylib with Lua Included
 
 on:
   push:
@@ -13,6 +13,15 @@ jobs:
     - name: Checkout Repository
       uses: actions/checkout@v4
 
+    - name: Download and Setup Lua Headers
+      run: |
+        echo "Đang tải mã nguồn Lua chính thức..."
+        curl -R -O https://www.lua.org/ftp/lua-5.4.6.tar.gz
+        tar zxf lua-5.4.6.tar.gz
+        mkdir -p include_lua
+        cp lua-5.4.6/src/*.h include_lua/
+        rm -rf lua-5.4.6 lua-5.4.6.tar.gz
+
     - name: Create Source Directory and File
       run: |
         mkdir -p src
@@ -20,9 +29,9 @@ jobs:
         #import <Foundation/Foundation.h>
 
         extern "C" {
-            #include <lua.h>
-            #include <lauxlib.h>
-            #include <lualib.h>
+            #include "lua.h"
+            #include "lauxlib.h"
+            #include "lualib.h"
         }
 
         const char* embeddedLuaScript = R"(
@@ -125,13 +134,14 @@ jobs:
         }
         EOF
 
-    - name: Compile Dylib
+    - name: Compile Dylib with Lua
       run: |
-        echo "Bắt đầu biên dịch file dylib..."
+        echo "Bắt đầu biên dịch file dylib (có kèm Lua headers)..."
         mkdir -p build
         clang++ -dynamiclib \
           -arch arm64 \
           -isysroot $(xcrun --sdk iphoneos --show-sdk-path) \
+          -Iinclude_lua \
           -fobjc-arc \
           src/main.mm \
           -o build/SicBoMod.dylib \
