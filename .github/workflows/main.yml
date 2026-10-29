@@ -1,33 +1,21 @@
-name: Build Dylib with Embedded Lua
+name: Build Dylib via Makefile
 
 on:
   push:
     branches: [ main, master ]
-  workflow_dispatch: # Cho phép bấm nút build thủ công trên web GitHub
+  workflow_dispatch:
 
 jobs:
   build:
-    runs-on: macos-latest # Sử dụng máy chủ macOS chính hãng
+    runs-on: macos-latest
 
     steps:
     - name: Checkout Repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
-    - name: Compile Dylib
+    - name: Run Makefile Build
       run: |
-        echo "Bắt đầu biên dịch mã nguồn C++/Objective-C nhúng Lua..."
-        mkdir -p build
-        
-        # Biên dịch trực tiếp bằng clang cho kiến trúc arm64 (iOS)
-        clang++ -dynamiclib \
-          -arch arm64 \
-          -isysroot $(xcrun --sdk iphoneos --show-sdk-path) \
-          -fobjc-arc \
-          src/main.mm \
-          -o build/SicBoMod.dylib \
-          -framework Foundation
-          
-        echo "Biên dịch thành công!"
+        make all
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
