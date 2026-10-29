@@ -1,4 +1,4 @@
-name: Build Dylib with Lua Included
+name: Build ImGui Overlay Dylib
 
 on:
   push:
@@ -13,159 +13,25 @@ jobs:
     - name: Checkout Repository
       uses: actions/checkout@v4
 
-    - name: Download and Setup Lua Source
+    - name: Compile Native Dylib
       run: |
-        echo "Đang tải mã nguồn Lua chính thức..."
-        curl -R -O https://www.lua.org/ftp/lua-5.4.6.tar.gz
-        tar zxf lua-5.4.6.tar.gz
-        mkdir -p src_lua
-        cp lua-5.4.6/src/*.h src_lua/
-        cp lua-5.4.6/src/*.c src_lua/
-        rm -f src_lua/lua.c src_lua/luac.c
+        echo "Bắt đầu biên dịch dylib cho iOS (arm64)..."
+        mkdir -p build
         
-        # Vá lỗi system() trên iOS SDK
-        sed -i '' 's/#define l_system(cmd)[[:space:]]*system(cmd)/#define l_system(cmd) ((void)(cmd), -1)/g' src_lua/loslib.c
-        
-        rm -rf lua-5.4.6 lua-5.4.6.tar.gz
-
-    - name: Create Source Directory and File
-      run: |
-        mkdir -p src
-        cat << 'EOF' > src/main.mm
-        #import <Foundation/Foundation.h>
-
-        extern "C" {
-            #include "lua.h"
-            #include "lauxlib.h"
-            #include "lualib.h"
-        }
-
-        const char* embeddedLuaScript = R"LUA_BLOCK(
-        local LocalPlayer = "LocalPlayer"
-        local MultiTable = "SicBoMultiplayerSceneTable3D"
-        local MultiPlayer = "SicBoMultiplayerScenePlayer3D"
-        local OfflineTable = "SicBoOfflineSicBoTable3D"
-        local Dealer = "SicBoOfflineSceneDealer3D"
-
-        local state = {
-            balance = false, allIn = false, noLose = false, testing = false,
-            comb = false, anyTrible = false, trible = false, double = false,
-            balanceValue = 999999999, status = "Sẵn sàng"
-        }
-
-        local function setPatch(className, methodName, enable, valType, value)
-            local success, err = pcall(function()
-                if enable then
-                    if valType == "int" then gg.il2cpp.patch(className, methodName, value)
-                    elseif valType == "bool" then gg.il2cpp.patch(className, methodName, value)
-                    elseif valType == "nop" then gg.il2cpp.nop(className, methodName) end
-                else
-                    gg.il2cpp.restore(className, methodName)
-                end
-            end)
-            return success, err
-        end
-
-        local function applyBalanceGate()
-            local enabled = state.balance or state.allIn
-            setPatch(LocalPlayer, "get_balance", enabled, "int", state.balanceValue)
-            setPatch(MultiTable, "GetUserbalance", enabled, "int", state.balanceValue)
-            if enabled then
-                state.status = "Vốn cược: " .. state.balanceValue .. " (Đã kích hoạt)"
-            else
-                state.status = "Balance/All In: Đã tắt và khôi phục"
-            end
-        end
-
-        function MainMenu()
-            local menuList = {
-                (state.balance and "[✔] " or "[ ] ") .. "Balance 999999999",
-                (state.allIn and "[✔] " or "[ ] ") .. "Cho phép All In vốn",
-                (state.noLose and "[✔] " or "[ ] ") .. "No Lose Line (Multiplayer)",
-                (state.testing and "[✔] " or "[ ] ") .. "Testing Mode (Offline)",
-                (state.comb and "[✔] " or "[ ] ") .. "Force Comb",
-                (state.anyTrible and "[✔] " or "[ ] ") .. "Force Any Triple",
-                (state.trible and "[✔] " or "[ ] ") .. "Force Triple",
-                (state.double and "[✔] " or "[ ] ") .. "Force Double",
-                "--- TRẠNG THÁI: " .. state.status .. " ---",
-                "Thoát"
-            }
-
-            local choix = gg.choice(menuList, nil, "SicBo Runtime Mod - iGameGod")
-            if choix == nil then return end
-            
-            if choix == 1 then state.balance = not state.balance; applyBalanceGate()
-            elseif choix == 2 then state.allIn = not state.allIn; applyBalanceGate()
-            elseif choix == 3 then
-                state.noLose = not state.noLose
-                setPatch(MultiPlayer, "loseLine", state.noLose, "nop", nil)
-                state.status = state.noLose and "No Lose Line ON" or "No Lose Line OFF"
-            elseif choix == 4 then
-                state.testing = not state.testing
-                setPatch(OfflineTable, "istesting", state.testing, "bool", true)
-                state.status = state.testing and "Testing Mode ON" or "Testing Mode OFF"
-            elseif choix == 5 then
-                state.comb = not state.comb
-                setPatch(Dealer, "isComb", state.comb, "bool", true)
-                state.status = "Force Comb: " .. tostring(state.comb)
-            elseif choix == 6 then
-                state.anyTrible = not state.anyTrible
-                setPatch(Dealer, "isAnyTrible", state.anyTrible, "bool", true)
-                state.status = "Force Any Triple: " .. tostring(state.anyTrible)
-            elseif choix == 7 then
-                state.trible = not state.trible
-                setPatch(Dealer, "isTrible", state.trible, "bool", true)
-                state.status = "Force Triple: " .. tostring(state.trible)
-            elseif choix == 8 then
-                state.double = not state.double
-                setPatch(Dealer, "isDouble", state.double, "bool", true)
-                state.status = "Force Double: " .. tostring(state.double)
-            end
-        end
-        )LUA_BLOCK";
-
-        __attribute__((constructor)) void initLuaEmbedded() {
-            dispatch_async(dispatch_get_main_queue(), ^{
-                lua_State *L = luaL_newstate();
-                luaL_openlibs(L);
-                
-                if (luaL_dostring(L, embeddedLuaScript) != LUA_OK) {
-                    const char *errMsg = lua_tostring(L, -1);
-                    NSLog(@"[Lua Error] %s", errMsg);
-                    lua_pop(L, 1);
-                }
-                
-                lua_close(L);
-            });
-        }
-        EOF
-
-    - name: Compile Dylib with Embedded Lua
-      run: |
-        echo "Biên dịch riêng mã C của Lua..."
-        mkdir -p obj_lua build
-        SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
-        
-        # Biên dịch từng file .c của Lua thành .o bằng C compiler (clang)
-        for f in src_lua/*.c; do
-          clang -c "$f" \
-            -arch arm64 \
-            -isysroot "$SDK_PATH" \
-            -Isrc_lua \
-            -o "obj_lua/$(basename "$f" .c).o"
-        done
-
-        echo "Liên kết dylib bằng clang++..."
         clang++ -dynamiclib \
           -arch arm64 \
-          -isysroot "$SDK_PATH" \
-          -Isrc_lua \
+          -isysroot $(xcrun --sdk iphoneos --show-sdk-path) \
           -fobjc-arc \
           src/main.mm \
-          obj_lua/*.o \
+          src/PubgLoad.mm \
+          src/ImGuiDrawView.mm \
           -o build/SicBoMod.dylib \
-          -framework Foundation
-
+          -framework Foundation \
+          -framework UIKit \
+          -framework Metal \
+          -framework MetalKit \
+          -framework QuartzCore
+          
         echo "Biên dịch thành công!"
 
     - name: Upload Artifact
