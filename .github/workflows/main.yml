@@ -19,11 +19,13 @@ jobs:
         curl -R -O https://www.lua.org/ftp/lua-5.4.6.tar.gz
         tar zxf lua-5.4.6.tar.gz
         mkdir -p src_lua
-        # Copy toàn bộ file .c và .h của Lua vào thư mục src_lua
         cp lua-5.4.6/src/*.h src_lua/
         cp lua-5.4.6/src/*.c src_lua/
-        # Loại bỏ các file không cần thiết cho dylib (như lua.c và luac.c chứa hàm main riêng)
         rm -f src_lua/lua.c src_lua/luac.c
+        
+        # Vá lỗi hàm system() không được hỗ trợ trên iOS trong loslib.c
+        sed -i '' 's/#define l_system(cmd)[[:space:]]*system(cmd)/#define l_system(cmd) ((void)(cmd), -1)/g' src_lua/loslib.c
+        
         rm -rf lua-5.4.6 lua-5.4.6.tar.gz
 
     - name: Create Source Directory and File
@@ -140,7 +142,7 @@ jobs:
 
     - name: Compile Dylib with Embedded Lua
       run: |
-        echo "Bắt đầu biên dịch file dylib kèm toàn bộ mã nguồn Lua..."
+        echo "Bắt đầu biên dịch file dylib tương thích iOS..."
         mkdir -p build
         clang++ -dynamiclib \
           -arch arm64 \
