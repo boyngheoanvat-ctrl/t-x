@@ -6,7 +6,6 @@ extern "C" {
     #include <lualib.h>
 }
 
-// Đoạn mã Lua nhúng cứng
 const char* embeddedLuaScript = R"(
 local LocalPlayer = "LocalPlayer"
 local MultiTable = "SicBoMultiplayerSceneTable3D"
