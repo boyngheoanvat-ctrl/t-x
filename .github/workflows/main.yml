@@ -23,7 +23,6 @@ jobs:
         #import <UIKit/UIKit.h>
 
         @interface PubgLoad : NSObject
-        @property (nonatomic, assign) BOOL menuVisible;
         + (void)load;
         @end
         EOF
@@ -33,8 +32,7 @@ jobs:
         #import <UIKit/UIKit.h>
 
         @interface ImGuiDrawView : UIViewController
-        + (BOOL)menuIsVisible;
-        + (void)showChange:(BOOL)visible;
+        + (void)toggleMenu;
         @end
         EOF
 
@@ -54,7 +52,7 @@ jobs:
         }
         EOF
 
-        # 4. Tạo file PubgLoad.mm
+        # 4. Tạo file PubgLoad.mm (Tạo nút nổi Floating Button trên màn hình)
         cat << 'EOF' > src/PubgLoad.mm
         #import "PubgLoad.h"
         #import "ImGuiDrawView.h"
@@ -62,159 +60,154 @@ jobs:
         @implementation PubgLoad
 
         + (void)load {
-            static PubgLoad *sharedInstance = nil;
             static dispatch_once_t onceToken;
             dispatch_once(&onceToken, ^{
-                sharedInstance = [[PubgLoad alloc] init];
-                [sharedInstance setupGestures];
-            });
-        }
-
-        - (void)setupGestures {
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                UIWindow *keyWindow = nil;
-                for (UIWindow *scene in [[UIApplication sharedApplication] connectedScenes]) {
-                    if ([scene isKindOfClass:[UIWindowScene class]]) {
-                        for (UIWindow *window in [(UIWindowScene *)scene windows]) {
-                            if (window.isKeyWindow) {
-                                keyWindow = window;
-                                break;
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                    UIWindow *targetWindow = nil;
+                    for (UIWindow *scene in [[UIApplication sharedApplication] connectedScenes]) {
+                        if ([scene isKindOfClass:[UIWindowScene class]]) {
+                            for (UIWindow *window in [(UIWindowScene *)scene windows]) {
+                                if (window.isKeyWindow) { targetWindow = window; break; }
                             }
                         }
                     }
-                }
-                if (!keyWindow) {
-                    keyWindow = [[UIApplication sharedApplication] keyWindow];
-                }
-                
-                if (keyWindow) {
-                    // Chạm 3 ngón tay để MỞ menu
-                    UITapGestureRecognizer *threeFingerTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleThreeFingerTap:)];
-                    threeFingerTap.numberOfTouchesRequired = 3;
-                    [keyWindow addGestureRecognizer:threeFingerTap];
+                    if (!targetWindow) {
+                        targetWindow = [[UIApplication sharedApplication] keyWindow];
+                    }
                     
-                    // Chạm 2 ngón tay để TẮT menu
-                    UITapGestureRecognizer *twoFingerTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleTwoFingerTap:)];
-                    twoFingerTap.numberOfTouchesRequired = 2;
-                    [keyWindow addGestureRecognizer:twoFingerTap];
-                    
-                    NSLog(@"[SicBoMod] Đã kích hoạt thành công cử chỉ cảm ứng!");
-                }
+                    if (targetWindow) {
+                        // Tạo nút nổi hình tròn chữ MOD ở góc trái màn hình
+                        UIButton *floatBtn = [UIButton buttonWithType:UIButtonTypeCustom];
+                        floatBtn.frame = CGRectMake(20, 100, 55, 55);
+                        floatBtn.backgroundColor = [UIColor colorWithRed:0.0 green:0.5 blue:1.0 alpha:0.9];
+                        [floatBtn setTitle:@"MOD" forState:UIControlStateNormal];
+                        [floatBtn setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+                        floatBtn.titleLabel.font = [UIFont boldSystemFontOfSize:14];
+                        floatBtn.layer.cornerRadius = 27.5;
+                        floatBtn.layer.borderWidth = 2.0;
+                        floatBtn.layer.borderColor = [UIColor whiteColor].CGColor;
+                        
+                        // Sự kiện chạm để bật/tắt menu
+                        [floatBtn addTarget:self action:@selector(floatButtonTapped:) forControlEvents:UIControlEventTouchUpInside];
+                        
+                        // Sự kiện kéo thả nút đi khắp màn hình
+                        UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(panButton:)];
+                        [floatBtn addGestureRecognizer:pan];
+                        
+                        [targetWindow addSubview:floatBtn];
+                        [targetWindow bringSubviewToFront:floatBtn];
+                        NSLog(@"[SicBoMod] Đã hiển thị nút nổi thành công!");
+                    }
+                });
             });
         }
 
-        - (void)handleThreeFingerTap:(UITapGestureRecognizer *)gesture {
-            self.menuVisible = YES;
-            [ImGuiDrawView showChange:YES];
+        + (void)floatButtonTapped:(UIButton *)sender {
+            [ImGuiDrawView toggleMenu];
         }
 
-        - (void)handleTwoFingerTap:(UITapGestureRecognizer *)gesture {
-            self.menuVisible = NO;
-            [ImGuiDrawView showChange:NO];
+        + (void)panButton:(UIPanGestureRecognizer *)pan {
+            UIView *btn = pan.view;
+            CGPoint translation = [pan translationInView:btn.superview];
+            CGPoint center = btn.center;
+            btn.center = CGPointMake(center.x + translation.x, center.y + translation.y);
+            [pan setTranslation:CGPointMake(0, 0) inView:btn.superview];
         }
 
         @end
         EOF
 
-        # 5. Tạo file ImGuiDrawView.mm
+        # 5. Tạo file ImGuiDrawView.mm (Giao diện Menu)
         cat << 'EOF' > src/ImGuiDrawView.mm
         #import "ImGuiDrawView.h"
         #import <CoreGraphics/CoreGraphics.h>
 
         static UIView *modMenuView = nil;
-        static BOOL isMenuShown = NO;
 
         @implementation ImGuiDrawView
 
-        + (BOOL)menuIsVisible {
-            return isMenuShown;
-        }
-
-        + (void)showChange:(BOOL)visible {
-            isMenuShown = visible;
+        + (void)toggleMenu {
             dispatch_async(dispatch_get_main_queue(), ^{
-                UIWindow *keyWindow = nil;
+                UIWindow *targetWindow = nil;
                 for (UIWindow *scene in [[UIApplication sharedApplication] connectedScenes]) {
                     if ([scene isKindOfClass:[UIWindowScene class]]) {
                         for (UIWindow *w in [(UIWindowScene *)scene windows]) {
-                            if (w.isKeyWindow) { keyWindow = w; break; }
+                            if (w.isKeyWindow) { targetWindow = w; break; }
                         }
                     }
                 }
-                if (!keyWindow) {
-                    keyWindow = [[UIApplication sharedApplication] keyWindow];
+                if (!targetWindow) {
+                    targetWindow = [[UIApplication sharedApplication] keyWindow];
+                }
+
+                if (!modMenuView && targetWindow) {
+                    // Khung Menu chính
+                    modMenuView = [[UIView alloc] initWithFrame:CGRectMake(80, 80, 320, 260)];
+                    modMenuView.backgroundColor = [UIColor colorWithRed:0.12 green:0.12 blue:0.15 alpha:0.95];
+                    modMenuView.layer.cornerRadius = 14.0;
+                    modMenuView.layer.borderWidth = 2.0;
+                    modMenuView.layer.borderColor = [UIColor colorWithRed:0.0 green:0.6 blue:1.0 alpha:1.0].CGColor;
+                    
+                    // Tiêu đề
+                    UILabel *titleLabel = [[UILabel alloc] initWithFrame:CGRectMake(10, 10, 300, 30)];
+                    titleLabel.text = @"👑 SICBO MOD MENU";
+                    titleLabel.textColor = [UIColor whiteColor];
+                    titleLabel.font = [UIFont boldSystemFontOfSize:16];
+                    titleLabel.textAlignment = NSTextAlignmentCenter;
+                    [modMenuView addSubview:titleLabel];
+                    
+                    // Nút chức năng 1
+                    UIButton *btn1 = [UIButton buttonWithType:UIButtonTypeSystem];
+                    btn1.frame = CGRectMake(15, 55, 290, 40);
+                    btn1.backgroundColor = [UIColor colorWithRed:0.2 green:0.4 blue:0.8 alpha:1.0];
+                    [btn1 setTitle:@"[ ] Hack Balance 999,999,999" forState:UIControlStateNormal];
+                    [btn1 setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+                    btn1.layer.cornerRadius = 8.0;
+                    [btn1 addTarget:self action:@selector(toggleFeature1:) forControlEvents:UIControlEventTouchUpInside];
+                    [modMenuView addSubview:btn1];
+                    
+                    // Nút chức năng 2
+                    UIButton *btn2 = [UIButton buttonWithType:UIButtonTypeSystem];
+                    btn2.frame = CGRectMake(15, 105, 290, 40);
+                    btn2.backgroundColor = [UIColor colorWithRed:0.2 green:0.4 blue:0.8 alpha:1.0];
+                    [btn2 setTitle:@"[ ] No Lose Line (Multiplayer)" forState:UIControlStateNormal];
+                    [btn2 setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+                    btn2.layer.cornerRadius = 8.0;
+                    [btn2 addTarget:self action:@selector(toggleFeature2:) forControlEvents:UIControlEventTouchUpInside];
+                    [modMenuView addSubview:btn2];
+                    
+                    // Nút đóng menu
+                    UIButton *closeBtn = [UIButton buttonWithType:UIButtonTypeSystem];
+                    closeBtn.frame = CGRectMake(60, 195, 200, 40);
+                    closeBtn.backgroundColor = [UIColor colorWithRed:0.8 green:0.2 blue:0.2 alpha:1.0];
+                    [closeBtn setTitle:@"Đóng Menu" forState:UIControlStateNormal];
+                    [closeBtn setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+                    closeBtn.layer.cornerRadius = 8.0;
+                    [closeBtn addTarget:self action:@selector(closeMenuTapped:) forControlEvents:UIControlEventTouchUpInside];
+                    [modMenuView addSubview:closeBtn];
+                    
+                    // Thêm tính năng kéo thả bảng menu
+                    UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(panMenu:)];
+                    [modMenuView addGestureRecognizer:pan];
+                    
+                    [targetWindow addSubview:modMenuView];
                 }
                 
-                if (visible) {
-                    if (!modMenuView && keyWindow) {
-                        // Khung Menu chính
-                        modMenuView = [[UIView alloc] initWithFrame:CGRectMake(50, 60, 300, 250)];
-                        modMenuView.backgroundColor = [UIColor colorWithRed:0.12 green:0.12 blue:0.15 alpha:0.95];
-                        modMenuView.layer.cornerRadius = 14.0;
-                        modMenuView.layer.borderWidth = 2.0;
-                        modMenuView.layer.borderColor = [UIColor colorWithRed:0.0 green:0.6 blue:1.0 alpha:1.0].CGColor;
-                        
-                        // Tiêu đề
-                        UILabel *titleLabel = [[UILabel alloc] initWithFrame:CGRectMake(10, 10, 280, 30)];
-                        titleLabel.text = @"👑 SICBO MOD MENU";
-                        titleLabel.textColor = [UIColor whiteColor];
-                        titleLabel.font = [UIFont boldSystemFontOfSize:16];
-                        titleLabel.textAlignment = NSTextAlignmentCenter;
-                        [modMenuView addSubview:titleLabel];
-                        
-                        // Nút chức năng 1
-                        UIButton *btn1 = [UIButton buttonWithType:UIButtonTypeSystem];
-                        btn1.frame = CGRectMake(15, 50, 270, 40);
-                        btn1.backgroundColor = [UIColor colorWithRed:0.2 green:0.4 blue:0.8 alpha:1.0];
-                        [btn1 setTitle:@"[ ] Hack Balance 999,999,999" forState:UIControlStateNormal];
-                        [btn1 setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
-                        btn1.layer.cornerRadius = 8.0;
-                        [btn1 addTarget:self action:@selector(toggleFeature1:) forControlEvents:UIControlEventTouchUpInside];
-                        [modMenuView addSubview:btn1];
-                        
-                        // Nút chức năng 2
-                        UIButton *btn2 = [UIButton buttonWithType:UIButtonTypeSystem];
-                        btn2.frame = CGRectMake(15, 100, 270, 40);
-                        btn2.backgroundColor = [UIColor colorWithRed:0.2 green:0.4 blue:0.8 alpha:1.0];
-                        [btn2 setTitle:@"[ ] No Lose Line (Multiplayer)" forState:UIControlStateNormal];
-                        [btn2 setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
-                        btn2.layer.cornerRadius = 8.0;
-                        [btn2 addTarget:self action:@selector(toggleFeature2:) forControlEvents:UIControlEventTouchUpInside];
-                        [modMenuView addSubview:btn2];
-                        
-                        // Nút đóng menu
-                        UIButton *closeBtn = [UIButton buttonWithType:UIButtonTypeSystem];
-                        closeBtn.frame = CGRectMake(50, 190, 200, 40);
-                        closeBtn.backgroundColor = [UIColor colorWithRed:0.8 green:0.2 blue:0.2 alpha:1.0];
-                        [closeBtn setTitle:@"Đóng Menu (2 Ngón)" forState:UIControlStateNormal];
-                        [closeBtn setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
-                        closeBtn.layer.cornerRadius = 8.0;
-                        [closeBtn addTarget:self action:@selector(closeMenuTapped:) forControlEvents:UIControlEventTouchUpInside];
-                        [modMenuView addSubview:closeBtn];
-                        
-                        // Thêm tính năng kéo thả bảng menu đi khắp màn hình
-                        UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(panMenu:)];
-                        [modMenuView addGestureRecognizer:pan];
-                    }
-                    
-                    if (modMenuView && !modMenuView.superview && keyWindow) {
-                        [keyWindow addSubview:modMenuView];
-                        [keyWindow bringSubviewToFront:modMenuView];
-                    }
-                    modMenuView.hidden = NO;
-                } else {
-                    if (modMenuView) {
-                        modMenuView.hidden = YES;
+                if (modMenuView) {
+                    modMenuView.hidden = !modMenuView.hidden;
+                    if (!modMenuView.hidden) {
+                        [modMenuView.superview bringSubviewToFront:modMenuView];
                     }
                 }
             });
         }
 
         + (void)panMenu:(UIPanGestureRecognizer *)pan {
-            CGPoint translation = [pan translationInView:modMenuView.superview];
-            CGPoint center = modMenuView.center;
-            modMenuView.center = CGPointMake(center.x + translation.x, center.y + translation.y);
-            [pan setTranslation:CGPointMake(0, 0) inView:modMenuView.superview];
+            UIView *menu = pan.view;
+            CGPoint translation = [pan translationInView:menu.superview];
+            CGPoint center = menu.center;
+            menu.center = CGPointMake(center.x + translation.x, center.y + translation.y);
+            [pan setTranslation:CGPointMake(0, 0) inView:menu.superview];
         }
 
         + (void)toggleFeature1:(UIButton *)sender {
@@ -232,7 +225,9 @@ jobs:
         }
 
         + (void)closeMenuTapped:(id)sender {
-            [self showChange:NO];
+            if (modMenuView) {
+                modMenuView.hidden = YES;
+            }
         }
 
         @end
