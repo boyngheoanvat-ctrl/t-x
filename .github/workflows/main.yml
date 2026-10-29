@@ -34,7 +34,8 @@ jobs:
             #include "lualib.h"
         }
 
-        const char* embeddedLuaScript = R"(
+        // Sử dụng cú pháp phân định tường minh R"LUA_BLOCK(...)LUA_BLOCK" để C++ không dịch nhầm Lua
+        const char* embeddedLuaScript = R"LUA_BLOCK(
         local LocalPlayer = "LocalPlayer"
         local MultiTable = "SicBoMultiplayerSceneTable3D"
         local MultiPlayer = "SicBoMultiplayerScenePlayer3D"
@@ -116,7 +117,7 @@ jobs:
                 state.status = "Force Double: " .. tostring(state.double)
             end
         end
-        )";
+        )LUA_BLOCK";
 
         __attribute__((constructor)) void initLuaEmbedded() {
             dispatch_async(dispatch_get_main_queue(), ^{
