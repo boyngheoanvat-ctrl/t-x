@@ -30,7 +30,7 @@ jobs:
         echo "Biên dịch thành công!"
 
     - name: Upload Artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: compiled-dylib
         path: build/SicBoMod.dylib
