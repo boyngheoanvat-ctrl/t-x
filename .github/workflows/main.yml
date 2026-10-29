@@ -54,7 +54,7 @@ jobs:
         }
         EOF
 
-        # 4. Tạo file PubgLoad.mm (Xử lý cử chỉ 3 ngón mở, 2 ngón tắt)
+        # 4. Tạo file PubgLoad.mm
         cat << 'EOF' > src/PubgLoad.mm
         #import "PubgLoad.h"
         #import "ImGuiDrawView.h"
@@ -73,10 +73,14 @@ jobs:
         - (void)setupGestures {
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
                 UIWindow *keyWindow = nil;
-                for (UIWindow *window in [[UIApplication sharedApplication] windows]) {
-                    if (window.isKeyWindow) {
-                        keyWindow = window;
-                        break;
+                for (UIWindow *scene in [[UIApplication sharedApplication] connectedScenes]) {
+                    if ([scene isKindOfClass:[UIWindowScene class]]) {
+                        for (UIWindow *window in [(UIWindowScene *)scene windows]) {
+                            if (window.isKeyWindow) {
+                                keyWindow = window;
+                                break;
+                            }
+                        }
                     }
                 }
                 if (!keyWindow) {
@@ -112,9 +116,10 @@ jobs:
         @end
         EOF
 
-        # 5. Tạo file ImGuiDrawView.mm (Giao diện Menu nổi UIKit)
+        # 5. Tạo file ImGuiDrawView.mm
         cat << 'EOF' > src/ImGuiDrawView.mm
         #import "ImGuiDrawView.h"
+        #import <CoreGraphics/CoreGraphics.h>
 
         static UIView *modMenuView = nil;
         static BOOL isMenuShown = NO;
@@ -128,11 +133,16 @@ jobs:
         + (void)showChange:(BOOL)visible {
             isMenuShown = visible;
             dispatch_async(dispatch_get_main_queue(), ^{
-                UIWindow *keyWindow = [[UIApplication sharedApplication] keyWindow];
-                if (!keyWindow) {
-                    for (UIWindow *w in [[UIApplication sharedApplication] windows]) {
-                        if (w.isKeyWindow) { keyWindow = w; break; }
+                UIWindow *keyWindow = nil;
+                for (UIWindow *scene in [[UIApplication sharedApplication] connectedScenes]) {
+                    if ([scene isKindOfClass:[UIWindowScene class]]) {
+                        for (UIWindow *w in [(UIWindowScene *)scene windows]) {
+                            if (w.isKeyWindow) { keyWindow = w; break; }
+                        }
                     }
+                }
+                if (!keyWindow) {
+                    keyWindow = [[UIApplication sharedApplication] keyWindow];
                 }
                 
                 if (visible) {
@@ -204,7 +214,7 @@ jobs:
             CGPoint translation = [pan translationInView:modMenuView.superview];
             CGPoint center = modMenuView.center;
             modMenuView.center = CGPointMake(center.x + translation.x, center.y + translation.y);
-            [pan setTranslation:CGPointZero inView:modMenuView.superview];
+            [pan setTranslation:CGPointMake(0, 0) inView:modMenuView.superview];
         }
 
         + (void)toggleFeature1:(UIButton *)sender {
@@ -238,12 +248,14 @@ jobs:
           -isysroot $(xcrun --sdk iphoneos --show-sdk-path) \
           -Isrc \
           -fobjc-arc \
+          -Wno-deprecated-declarations \
           src/main.mm \
           src/PubgLoad.mm \
           src/ImGuiDrawView.mm \
           -o build/SicBoMod.dylib \
           -framework Foundation \
           -framework UIKit \
+          -framework CoreGraphics \
           -framework QuartzCore
           
         echo "Biên dịch thành công!"
